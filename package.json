@@ -8,7 +8,7 @@
     "build": "patch-package && vite build",
     "preview": "vite preview",
     "format": "prettier --write \"src/**/*.{js,vue,css,json}\"",
-    "postinstall": "patch-package"
+    "postinstall": "echo '==== Running Patch ====' && patch-package"
   },
   "dependencies": {
     "cesium": "1.134.0",
