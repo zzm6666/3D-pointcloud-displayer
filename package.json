@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "patch-package && vite build",
     "preview": "vite preview",
     "format": "prettier --write \"src/**/*.{js,vue,css,json}\"",
     "postinstall": "patch-package"
