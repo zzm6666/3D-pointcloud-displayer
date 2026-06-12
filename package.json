@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "format": "prettier --write \"src/**/*.{js,vue,css,json}\""
+    "format": "prettier --write \"src/**/*.{js,vue,css,json}\"",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "cesium": "1.134.0",
@@ -16,6 +17,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",
+    "patch-package": "^8.0.0",
     "prettier": "^3.8.4",
     "vite": "^8.0.12",
     "vite-plugin-cesium": "^1.2.23"
