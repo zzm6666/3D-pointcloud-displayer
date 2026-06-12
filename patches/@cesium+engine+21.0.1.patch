@@ -1,0 +1,13 @@
+diff --git a/node_modules/@cesium/engine/Source/Core/ComponentDatatype.js b/node_modules/@cesium/engine/Source/Core/ComponentDatatype.js
+index d6b3c1f..a09f0b5 100644
+--- a/node_modules/@cesium/engine/Source/Core/ComponentDatatype.js
++++ b/node_modules/@cesium/engine/Source/Core/ComponentDatatype.js
+@@ -295,7 +295,7 @@ ComponentDatatype.createArrayBufferView = function (
+     case ComponentDatatype.FLOAT:
+       return new Float32Array(buffer, byteOffset, length);
+     case ComponentDatatype.DOUBLE:
+-      return new Float64Array(buffer, byteOffset, length);
++      return new Float64Array(buffer.slice(byteOffset, byteOffset + 8 * length));
+     //>>includeStart('debug', pragmas.debug);
+     default:
+       throw new DeveloperError("componentDatatype is not a valid value.");
