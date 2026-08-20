@@ -88,9 +88,17 @@ onMounted(() => {
   viewer.scene.globe.show = false
   viewer.scene.backgroundColor = Cesium.Color.WHITE
   viewer.scene.skyAtmosphere.show = false
-  viewer.scene.skyBox.show = false
   viewer.scene.sun.show = false
   viewer.scene.moon.show = false
+
+  // 最小化配置：把旋转绑给中键，其他都恢复 Cesium 默认
+  // 用户测试发现：物理中键拖拽 = 想要的旋转效果（左键被系统拦截无法触发）
+  const canvas = viewer.scene.canvas
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault())
+  const controller = viewer.scene.screenSpaceCameraController
+  controller.enableInputs = true
+  controller.rotateEventTypes = [0, 2]  // LEFT_DRAG=0, MIDDLE_DRAG=2，左键和中键都 = 旋转
+  // 其他属性保持 Cesium 默认
 })
 
 onBeforeUnmount(() => {

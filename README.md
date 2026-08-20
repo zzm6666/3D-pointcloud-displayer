@@ -7,25 +7,25 @@
 - 🗂️ **文件夹上传** — 利用浏览器 File System Access API 直接选择本地文件夹，自动定位 `tileset.json` 并加载
 - 📦 **压缩包上传** — 支持拖拽/选择 `.zip` 文件，浏览器端自动解压后加载
 - 🌐 **URL 加载** — 从远程 HTTP 服务器直接加载 3D Tiles 数据
-- 🎨 **点云渲染增强** — EDL (Eye-Dome Lighting) 让点云更具立体感，可自定义点大小和颜色
+- 🎨 **点云渲染增强** — 通过 EDL (Eye-Dome Lighting)、点大小和颜色样式优化点云显示
 - 🔄 **视角复位** — 一键回到最佳观察角度
 
 ## 技术栈
 
-| 技术 | 版本 | 用途 |
-|---|---|---|
-| Vue 3 | ^3.5 | 前端框架 (Composition API + `<script setup>`) |
-| Vite | ^8.0 | 构建工具 |
-| CesiumJS | 1.134.0 | 3D 渲染引擎，加载 3D Tiles 点云 |
-| JSZip | ^3.10 | 浏览器端 ZIP 解压 |
-| patch-package | ^8.0 | 修补 Cesium Engine 上游 bug |
-| vite-plugin-cesium | ^1.2 | 自动处理 Cesium 静态资源路径 |
+| 技术               | 版本    | 用途                                          |
+| ------------------ | ------- | --------------------------------------------- |
+| Vue 3              | ^3.5    | 前端框架 (Composition API + `<script setup>`) |
+| Vite               | ^8.0    | 构建工具                                      |
+| CesiumJS           | 1.134.0 | 3D 渲染引擎，加载 3D Tiles 点云               |
+| JSZip              | ^3.10   | 浏览器端 ZIP 解压                             |
+| patch-package      | ^8.0    | 修补 Cesium Engine 上游 bug                   |
+| vite-plugin-cesium | ^1.2    | 自动处理 Cesium 静态资源路径                  |
 
 ## 快速开始
 
 ### 环境要求
 
-- Node.js >= 18
+- Node.js >= 20.19.0（或 >= 22.12.0，Vite 8 要求）
 - 支持 File System Access API 的现代浏览器（Chrome / Edge 86+）
 
 ### 安装
@@ -68,13 +68,13 @@ VITE_SERVER_URL = https://your-server.com
 
 ### Vite 代理
 
-开发环境下，`/file` 开头的请求会被代理到 `VITE_SERVER_URL` 指定的服务器，方便加载远程点云数据：
+开发环境下，Vite 使用 `loadEnv` 读取当前模式的环境文件，`/file` 开头的请求会被代理到 `VITE_SERVER_URL` 指定的服务器，方便加载远程点云数据。开发服务器默认只监听 `localhost`，如需局域网访问请按部署环境显式调整 `vite.config.js`：
 
 ```js
 // vite.config.js
 proxy: {
   '/file': {
-    target: SERVER_URL,
+    target: env.VITE_SERVER_URL,
     changeOrigin: true
   }
 }
@@ -111,7 +111,7 @@ tileset.pointCloudShading.attenuation = true
 tileset.pointCloudShading.geometricErrorScale = 1.0
 tileset.pointCloudShading.maximumAttenuation = 5
 tileset.pointCloudShading.baseResolution = 1.0
-tileset.pointCloudShading.eyeDomeLighting = true        // 开启 EDL
+tileset.pointCloudShading.eyeDomeLighting = true // 开启 EDL
 tileset.pointCloudShading.eyeDomeLightingStrength = 2.0
 tileset.pointCloudShading.eyeDomeLightingRadius = 0.8
 
@@ -136,19 +136,16 @@ tileset.style = new Cesium.Cesium3DTileStyle({
 ```
 3D-pointcloud-displayer/
 ├── index.html                  # HTML 入口
-├── vite.config.js              # Vite 配置（插件 + 代理）
+├── vite.config.js              # Vite 配置（插件、环境变量和代理）
 ├── package.json
-├── .env                        # 环境变量
+├── .env                        # 本地环境变量（不要提交敏感信息）
 ├── patches/                    # patch-package 补丁
 │   └── @cesium+engine+21.0.1.patch
-├── public/                     # 静态资源
-├── src/
-│   ├── main.js                 # Vue 应用入口
-│   ├── style.css               # 全局样式
-│   ├── App.vue                 # 核心组件（全部 UI + 业务逻辑）
-│   └── favicon.png             # 站点图标
-└── dist/                       # 构建产物
-    └── cesium/                 # Cesium 静态资源（Assets/Widgets/Workers）
+└── src/
+    ├── main.js                 # Vue 应用入口
+    ├── style.css               # 全局样式
+    ├── App.vue                 # 核心组件（UI、数据加载和资源生命周期）
+    └── favicon.png             # 站点图标
 ```
 
 ## License
