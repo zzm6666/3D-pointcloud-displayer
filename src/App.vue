@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onBeforeUnmount, onMounted, watch } from 'vue'
 import * as Cesium from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
 import faviconPng from './favicon.png'
@@ -31,13 +31,35 @@ const urlInput = ref('')
 
 let viewer = null
 
+/** @type {Set<Cesium.Cesium3DTileset>} */
+const managedTilesets = new Set()
+/** @type {Set<string>} */
+let activeObjectUrls = new Set()
+
+function releaseObjectUrls(objectUrls) {
+  for (const url of objectUrls) URL.revokeObjectURL(url)
+  objectUrls.clear()
+}
+
+function destroyTileset(tileset) {
+  if (!tileset || !viewer || viewer.isDestroyed()) return
+  if (viewer.scene.primitives.contains(tileset)) {
+    viewer.scene.primitives.removeAndDestroy(tileset)
+  }
+  managedTilesets.delete(tileset)
+}
+
+function destroyManagedResources() {
+  for (const tileset of [...managedTilesets]) destroyTileset(tileset)
+  managedTilesets.clear()
+  currentTileset = null
+  releaseObjectUrls(activeObjectUrls)
+  activeObjectUrls = new Set()
+}
+
 function goHome() {
   if (!viewer) return
-  const primitives = [...viewer.scene.primitives._primitives]
-  primitives.forEach((p) => {
-    if (p instanceof Cesium.Cesium3DTileset) viewer.scene.primitives.removeAndDestroy(p)
-  })
-  currentTileset = null
+  destroyManagedResources()
   showUpload.value = true
   errorMsg.value = ''
 }
@@ -71,6 +93,13 @@ onMounted(() => {
   viewer.scene.moon.show = false
 })
 
+onBeforeUnmount(() => {
+  if (errorTimer) clearTimeout(errorTimer)
+  destroyManagedResources()
+  if (viewer && !viewer.isDestroyed()) viewer.destroy()
+  viewer = null
+})
+
 function applyTilesetSettings(tileset) {
   tileset.pointCloudShading.attenuation = true
   tileset.pointCloudShading.geometricErrorScale = 1.0
@@ -100,17 +129,24 @@ async function loadFromUrl() {
   if (!url) { errorMsg.value = '请输入 tileset.json 的 URL 地址'; return }
   loading.value = true
   errorMsg.value = ''
+  let tileset = null
   try {
-    const tileset = await Cesium.Cesium3DTileset.fromUrl(url, {
+    tileset = await Cesium.Cesium3DTileset.fromUrl(url, {
       maximumScreenSpaceError: 10, preferLeaves: true, maximumMemoryUsage: 512
     })
+    const previousTilesets = [...managedTilesets]
     viewer.scene.primitives.add(tileset)
+    managedTilesets.add(tileset)
     applyTilesetSettings(tileset)
-    currentTileset = tileset
     const range = tileset.boundingSphere.radius * 2.5
     await viewer.zoomTo(tileset, new Cesium.HeadingPitchRange(0, -Math.PI / 4, range))
+    for (const previousTileset of previousTilesets) destroyTileset(previousTileset)
+    releaseObjectUrls(activeObjectUrls)
+    activeObjectUrls = new Set()
+    currentTileset = tileset
     showUpload.value = false
   } catch (err) {
+    if (tileset) destroyTileset(tileset)
     console.error('加载点云失败:', err)
     errorMsg.value = err.message || '加载失败，请检查 URL 是否正确以及服务器是否支持跨域访问'
   } finally { loading.value = false }
@@ -283,22 +319,31 @@ function readAllDirectoryEntries(reader) {
 async function loadTilesetFromFiles(fileList) {
   loading.value = true
   errorMsg.value = ''
+  let objectUrls = new Set()
+  let tileset = null
   try {
     const fileMap = new Map()
     for (const file of fileList) fileMap.set(file.webkitRelativePath || file.name, file)
     const rootTilesetPath = findRootTileset(fileMap)
     if (!rootTilesetPath) throw new Error('未找到 tileset.json 文件')
-    const rootBlobUrl = await processTilesetFiles(fileMap, rootTilesetPath)
-    const tileset = await Cesium.Cesium3DTileset.fromUrl(rootBlobUrl, {
+    const rootBlobUrl = await processTilesetFiles(fileMap, rootTilesetPath, objectUrls)
+    tileset = await Cesium.Cesium3DTileset.fromUrl(rootBlobUrl, {
       maximumScreenSpaceError: 10, preferLeaves: true, maximumMemoryUsage: 512
     })
+    const previousTilesets = [...managedTilesets]
     viewer.scene.primitives.add(tileset)
+    managedTilesets.add(tileset)
     applyTilesetSettings(tileset)
-    currentTileset = tileset
     const range = tileset.boundingSphere.radius * 2.5
     await viewer.zoomTo(tileset, new Cesium.HeadingPitchRange(0, -Math.PI / 4, range))
+    for (const previousTileset of previousTilesets) destroyTileset(previousTileset)
+    releaseObjectUrls(activeObjectUrls)
+    activeObjectUrls = objectUrls
+    currentTileset = tileset
     showUpload.value = false
   } catch (err) {
+    if (tileset) destroyTileset(tileset)
+    releaseObjectUrls(objectUrls)
     console.error('加载点云失败:', err)
     errorMsg.value = err.message || '加载失败，请检查文件格式'
   } finally { loading.value = false }
@@ -315,10 +360,15 @@ function findRootTileset(fileMap) {
   return rootPath
 }
 
-async function processTilesetFiles(fileMap, rootTilesetPath) {
+async function processTilesetFiles(fileMap, rootTilesetPath, objectUrls) {
+  const createObjectUrl = (blob) => {
+    const url = URL.createObjectURL(blob)
+    objectUrls.add(url)
+    return url
+  }
   const blobUrlMap = new Map()
   for (const [path, file] of fileMap) {
-    if (!path.endsWith('.json')) blobUrlMap.set(path, URL.createObjectURL(file))
+    if (!path.endsWith('.json')) blobUrlMap.set(path, createObjectUrl(file))
   }
   const jsonBlobUrls = new Map()
   for (const [path, file] of fileMap) {
@@ -328,8 +378,8 @@ async function processTilesetFiles(fileMap, rootTilesetPath) {
         const json = JSON.parse(text)
         const basePath = path.substring(0, path.lastIndexOf('/') + 1)
         rewriteContentUris(json, basePath, blobUrlMap)
-        jsonBlobUrls.set(path, URL.createObjectURL(new Blob([JSON.stringify(json)], { type: 'application/json' })))
-      } catch { jsonBlobUrls.set(path, URL.createObjectURL(file)) }
+        jsonBlobUrls.set(path, createObjectUrl(new Blob([JSON.stringify(json)], { type: 'application/json' })))
+      } catch { jsonBlobUrls.set(path, createObjectUrl(file)) }
     }
   }
   const allBlobUrls = new Map([...blobUrlMap, ...jsonBlobUrls])
@@ -341,8 +391,8 @@ async function processTilesetFiles(fileMap, rootTilesetPath) {
         const json = JSON.parse(text)
         const basePath = path.substring(0, path.lastIndexOf('/') + 1)
         rewriteContentUris(json, basePath, allBlobUrls)
-        finalJsonBlobUrls.set(path, URL.createObjectURL(new Blob([JSON.stringify(json)], { type: 'application/json' })))
-      } catch { finalJsonBlobUrls.set(path, URL.createObjectURL(file)) }
+        finalJsonBlobUrls.set(path, createObjectUrl(new Blob([JSON.stringify(json)], { type: 'application/json' })))
+      } catch { finalJsonBlobUrls.set(path, createObjectUrl(file)) }
     }
   }
   return finalJsonBlobUrls.get(rootTilesetPath)
