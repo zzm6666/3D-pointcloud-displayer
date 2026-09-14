@@ -121,7 +121,7 @@ tileset.style = new Cesium.Cesium3DTileStyle({
 })
 ```
 
-这些参数可根据需要在 `App.vue` 的 `applyTilesetSettings` 函数中调整。
+这些参数可根据需要在 `src/cesium/viewer.js` 的 `applyTilesetSettings` 函数中调整。
 
 ## 已知问题与修复
 
@@ -144,9 +144,33 @@ tileset.style = new Cesium.Cesium3DTileStyle({
 └── src/
     ├── main.js                 # Vue 应用入口
     ├── style.css               # 全局样式
-    ├── App.vue                 # 核心组件（UI、数据加载和资源生命周期）
-    └── favicon.png             # 站点图标
+    ├── favicon.png             # 站点图标
+    ├── App.vue                 # 页面编排：串联加载器与上传界面，管理提示与加载态
+    ├── cesium/
+    │   └── viewer.js           # Cesium Viewer 创建、点云渲染参数、相机取景
+    ├── components/
+    │   └── UploadOverlay.vue   # 上传遮罩层：模式切换、两张上传卡片、URL 输入
+    ├── composables/
+    │   └── usePointCloudViewer.js  # Viewer 与 tileset 生命周期、三种加载入口
+    └── utils/
+        ├── fileReaders.js      # 文件夹 / 拖拽 / ZIP 的文件读取
+        └── tilesetFiles.js     # tileset.json 定位与 content.uri → Blob URL 重写
 ```
+
+### 模块依赖方向
+
+```
+App.vue ──► components/UploadOverlay.vue
+   │
+   ├──► composables/usePointCloudViewer.js ──► cesium/viewer.js
+   │            │
+   │            └──► utils/tilesetFiles.js
+   │
+   └──► utils/fileReaders.js
+```
+
+底层模块不反向依赖上层：`utils/` 与 `cesium/` 不认识 Vue 组件，
+`composables/` 只做状态与生命周期编排，`App.vue` 仅负责把用户操作接到加载器上。
 
 ## License
 
